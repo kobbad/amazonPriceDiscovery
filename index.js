@@ -1,9 +1,11 @@
 const puppeteer = require('puppeteer');
-const $ = require('cheerio');
-const CronJob = require('cron').CronJob;
-const nodemailer = require('nodemailer');
+const cheerio = require('cheerio');
 
-const url = 'https://www.amazon.com/Sony-Noise-Cancelling-Headphones-WH1000XM3/dp/B07G4MNFS1/';
+
+const url = 'https://www.amazon.com/hz/wishlist/genericItemsPage/1FAS51AUY59QB?ref_=wl_share';
+var links = [];
+const prefix = "https://www.amazon.com";
+var products = [];
 
 async function configureBrowser() {
     const browser = await puppeteer.launch();
@@ -12,54 +14,85 @@ async function configureBrowser() {
     return page;
 }
 
+async function configureBrowser2(url2) {
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+  await page.goto(url2);
+  return page;
+}
+
 async function checkPrice(page) {
     await page.reload();
     let html = await page.evaluate(() => document.body.innerHTML);
+    const $ = cheerio.load(html);
     // console.log(html);
 
-    $('#priceblock_dealprice', html).each(function() {
-        let dollarPrice = $(this).text();
-        // console.log(dollarPrice);
-        let currentPrice = Number(dollarPrice.replace(/[^0-9.-]+/g,""));
+    // $('#priceblock_ourprice', html).each(function() {
+    //     let dollarPrice = $(this).text();
+    //     console.log(dollarPrice);
 
-        if (currentPrice < 300) {
-            console.log("BUY!!!! " + currentPrice);
-            sendNotification(currentPrice);
-        }
-    });
+    // });
+
+    $('.a-link-normal.wl-image-overlay').each( (index, value) => {
+      var link = $(value).attr('href');
+      links.push({"link": link});
+      // console.log("worked");
+   });
+  // $('a').each(function() {
+  //   var text = $(this).text();
+  //   var link = $(this).attr('href');
+  //   console.log(text + ' --> ' + link);
+  // });
+  // let fel = $('main').children().first();
+  // console.log("test");
+  // console.log(fel.get(0).tagName);
 }
 
-async function startTracking() {
-    const page = await configureBrowser();
-  
-    let job = new CronJob('* */30 * * * *', function() { //runs every 30 minutes in this config
-      checkPrice(page);
-    }, null, true, null, null, true);
-    job.start();
+async function checkPrice2(page) {
+  await page.reload();
+  let html = await page.evaluate(() => document.body.innerHTML);
+  const $ = cheerio.load(html);
+  // console.log(html);
+
+  $('.a-size-large.product-title-word-break', html).each(function() {
+    let dollarPrice = $(this).text();
+    console.log(dollarPrice.trim());
+
+});
+  $('#priceblock_ourprice, #priceblock_dealprice', html).each(function() {
+      let dollarPrice = $(this).text();
+      console.log(dollarPrice);
+
+  });
+  $('.a-dynamic-image.a-stretch-vertical', html).each(function() {
+    let dollarPrice = $(this).attr('src');
+    console.log(dollarPrice);
+
+});
+
+
+
+
 }
 
-async function sendNotification(price) {
+async function parseItem(){
+  var arrayLength = links.length;
+  for (var i = 0; i<arrayLength;i++){
+    // console.log(prefix.concat(links[i].link));
+    var new_url = prefix.concat(links[i].link);
+    let page = await configureBrowser2(new_url);
+    await checkPrice2(page);
 
-    let transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: '*****@gmail.com',
-        pass: '*****'
-      }
-    });
-  
-    let textToSend = 'Price dropped to ' + price;
-    let htmlText = `<a href=\"${url}\">Link</a>`;
-  
-    let info = await transporter.sendMail({
-      from: '"Price Tracker" <*****@gmail.com>',
-      to: "*****@gmail.com",
-      subject: 'Price dropped to ' + price, 
-      text: textToSend,
-      html: htmlText
-    });
-  
-    console.log("Message sent: %s", info.messageId);
   }
+}
 
-startTracking();
+async function monitor() {
+  let page = await configureBrowser();
+  await checkPrice(page);
+  await parseItem();
+  // console.log(links);
+
+}
+
+monitor();
+
